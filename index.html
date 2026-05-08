@@ -67,7 +67,7 @@
     async function runAI(id) {
         const key = document.getElementById('apiKey').value;
         const files = document.getElementById(`files-${id}`).files;
-        if (!key || !files[0]) return alert("Please enter your Key and upload a Photo!");
+        if (!key || !files[0]) return alert("Key + Photo needed!");
 
         const btn = document.getElementById(`btn-${id}`);
         const load = document.getElementById(`loading-${id}`);
@@ -75,16 +75,16 @@
         load.style.display = 'block';
         
         try {
-            // Shrink only the FIRST image to save memory/data
             const base64 = await resizeImage(files[0]);
 
-            const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+            // UPDATED TO V1 PRODUCTION ENDPOINT
+            const resp = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${key}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     contents: [{
                         parts: [
-                            { text: "Create a clothing listing. Format:\nTitle: [Brand] [Item] [Colour] [Size] - sku\n\nColour: [Colour]\nSize: [Size]\nCondition: [Condition]\n\n🧼 Washed and ironed, ready to be worn!\n\n[One sentence about item]\n\nSame day / Next day shipping!\nMessage me if you have any questions!\n#vintage #streetwear #fashion #style #resell" },
+                            { text: "Create a clothing listing. Format:\nTitle: [Brand] [Item] [Colour] [Size] - sku\n\nColour: [Colour]\nSize: [Size]\nCondition: [Condition]\n\n🧼 Washed and ironed, ready to be worn!\n\n[One sentence about item style]\n\nSame day / Next day shipping!\nMessage me if you have any questions!\n#vintage #streetwear #fashion #style #resell" },
                             { inline_data: { mime_type: "image/jpeg", data: base64 } }
                         ]
                     }]
@@ -104,7 +104,7 @@
                     </div>`;
             }
         } catch (e) {
-            alert("Connection Error. Your phone might be struggling with the file size. Try uploading just 1 photo to test.");
+            alert("App Connection Error. Please try again.");
         }
         btn.disabled = false;
         load.style.display = 'none';
@@ -117,14 +117,13 @@
                 const img = new Image();
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const max = 600; // Small but clear enough for AI
+                    const max = 800;
                     let w = img.width, h = img.height;
                     if (w > h) { if (w > max) { h *= max / w; w = max; } }
                     else { if (h > max) { w *= max / h; h = max; } }
                     canvas.width = w; canvas.height = h;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, w, h);
-                    resolve(canvas.toDataURL('image/jpeg', 0.6).split(',')[1]);
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/jpeg', 0.7).split(',')[1]);
                 };
                 img.src = e.target.result;
             };
