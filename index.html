@@ -10,25 +10,31 @@
         .api-box { background: #1a1a1a; color: white; padding: 15px; border-radius: 12px; margin-bottom: 20px; }
         .api-box input { width: 100%; padding: 10px; margin-top: 8px; border-radius: 8px; border: none; box-sizing: border-box; }
         .item-block { background: white; padding: 20px; border-radius: 15px; margin-bottom: 15px; border: 1px solid #ddd; }
-        button { width: 100%; padding: 16px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; }
+        .preview-grid { display: flex; gap: 8px; overflow-x: auto; margin: 10px 0; }
+        .preview-grid img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; flex-shrink: 0; border: 1px solid #eee; }
+        button { width: 100%; padding: 16px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; font-size: 1rem; }
         .ai-btn { background: #5856d6; color: white; margin-top: 10px; }
+        .ai-btn:disabled { background: #ccc; }
         .copy-box { background: #fff; padding: 15px; border-radius: 12px; margin-top: 15px; border-left: 5px solid #5856d6; box-shadow: 0 4px 12px rgba(0,0,0,0.1); position: relative; }
-        pre { white-space: pre-wrap; font-size: 0.95rem; margin: 0; }
+        pre { white-space: pre-wrap; font-size: 0.95rem; margin: 0; font-family: inherit; }
+        .loading-text { color: #5856d6; font-weight: bold; text-align: center; display: none; padding: 10px; }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="api-box">
-        <label>API Key</label>
-        <input type="password" id="apiKey" oninput="localStorage.setItem('gemini_key', this.value)">
+        <label>Gemini API Key</label>
+        <input type="password" id="apiKey" placeholder="Paste key here...">
     </div>
     <div id="items-container"></div>
-    <button onclick="addItem()" style="background:#ddd; margin-top:10px;">+ Add Item</button>
+    <button onclick="addItem()" style="background:#e5e5ea; margin-top:10px;">+ Add Another Item</button>
 </div>
 
 <script>
     window.onload = () => {
-        document.getElementById('apiKey').value = localStorage.getItem('gemini_key') || '';
+        const saved = localStorage.getItem('gemini_key');
+        if (saved) document.getElementById('apiKey').value = saved;
+        document.getElementById('apiKey').oninput = (e) => localStorage.setItem('gemini_key', e.target.value);
         addItem();
     };
 
@@ -39,8 +45,9 @@
         div.className = 'item-block';
         div.innerHTML = `
             <strong>Item #${id}</strong>
-            <input type="file" id="files-${id}" accept="image/*" onchange="preview(${id})">
-            <div id="preview-${id}" style="margin-top:10px"></div>
+            <input type="file" id="files-${id}" multiple accept="image/*" onchange="preview(${id})">
+            <div id="preview-${id}" class="preview-grid"></div>
+            <div id="loading-${id}" class="loading-text">AI is reading photo... 🔎</div>
             <button class="ai-btn" id="btn-${id}" onclick="runAI(${id})">Scan & Generate</button>
             <div id="result-${id}"></div>
         `;
@@ -48,50 +55,81 @@
     }
 
     function preview(id) {
-        const file = document.getElementById(`files-${id}`).files[0];
-        document.getElementById(`preview-${id}`).innerHTML = `<img src="${URL.createObjectURL(file)}" style="width:100px; border-radius:8px;">`;
+        const grid = document.getElementById(`preview-${id}`);
+        grid.innerHTML = "";
+        Array.from(document.getElementById(`files-${id}`).files).slice(0, 5).forEach(file => {
+            const img = document.createElement('img');
+            img.src = URL.createObjectURL(file);
+            grid.appendChild(img);
+        });
     }
 
     async function runAI(id) {
         const key = document.getElementById('apiKey').value;
-        const file = document.getElementById(`files-${id}`).files[0];
+        const files = document.getElementById(`files-${id}`).files;
+        if (!key || !files[0]) return alert("Please enter your Key and upload a Photo!");
+
         const btn = document.getElementById(`btn-${id}`);
-        btn.innerText = "Analyzing...";
-
+        const load = document.getElementById(`loading-${id}`);
+        btn.disabled = true;
+        load.style.display = 'block';
+        
         try {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = async () => {
-                const base64 = reader.result.split(',')[1];
-                
-                // Trying a slightly different "stable" endpoint
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`;
-                
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [{ text: "Create a clothing listing. Format: Title: [Brand] [Item] [Colour] [Size] - sku. Same day shipping." }, 
-                                    { inline_data: { mime_type: "image/jpeg", data: base64 } }]
-                        }]
-                    })
-                });
+            // Shrink only the FIRST image to save memory/data
+            const base64 = await resizeImage(files[0]);
 
-                const data = await response.json();
-                
-                if (data.error) {
-                    alert("GOOGLE ERROR: " + data.error.message);
-                } else {
-                    const text = data.candidates[0].content.parts[0].text;
-                    document.getElementById(`result-${id}`).innerHTML = `<div class="copy-box"><pre>${text}</pre></div>`;
-                }
-                btn.innerText = "Scan & Generate";
-            };
+            const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            { text: "Create a clothing listing. Format:\nTitle: [Brand] [Item] [Colour] [Size] - sku\n\nColour: [Colour]\nSize: [Size]\nCondition: [Condition]\n\n🧼 Washed and ironed, ready to be worn!\n\n[One sentence about item]\n\nSame day / Next day shipping!\nMessage me if you have any questions!\n#vintage #streetwear #fashion #style #resell" },
+                            { inline_data: { mime_type: "image/jpeg", data: base64 } }
+                        ]
+                    }]
+                })
+            });
+
+            const data = await resp.json();
+            
+            if (data.error) {
+                alert("GOOGLE ERROR: " + data.error.message);
+            } else {
+                const text = data.candidates[0].content.parts[0].text;
+                document.getElementById(`result-${id}`).innerHTML = `
+                    <div class="copy-box">
+                        <button onclick="navigator.clipboard.writeText(this.nextElementSibling.innerText); this.innerText='Copied!'" style="width:auto; float:right; background:#000; color:#fff; padding:4px 8px; border-radius:4px; font-size:0.7rem;">Copy</button>
+                        <pre>${text}</pre>
+                    </div>`;
+            }
         } catch (e) {
-            alert("App Error: " + e.message);
-            btn.innerText = "Scan & Generate";
+            alert("Connection Error. Your phone might be struggling with the file size. Try uploading just 1 photo to test.");
         }
+        btn.disabled = false;
+        load.style.display = 'none';
+    }
+
+    function resizeImage(file) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const max = 600; // Small but clear enough for AI
+                    let w = img.width, h = img.height;
+                    if (w > h) { if (w > max) { h *= max / w; w = max; } }
+                    else { if (h > max) { w *= max / h; h = max; } }
+                    canvas.width = w; canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/jpeg', 0.6).split(',')[1]);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
     }
 </script>
 </body>
