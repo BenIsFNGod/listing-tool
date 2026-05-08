@@ -5,98 +5,80 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AI Listing Assistant</title>
     <style>
-        body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 15px; margin: 0; color: #1a1a1a; }
+        body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
         .container { max-width: 500px; margin: auto; padding-bottom: 100px; }
         .api-box { background: #1a1a1a; color: white; padding: 15px; border-radius: 12px; margin-bottom: 20px; }
         .api-box input { width: 100%; padding: 10px; margin-top: 8px; border-radius: 8px; border: none; box-sizing: border-box; }
-        .item-block { background: white; padding: 20px; border-radius: 15px; margin-bottom: 15px; border: 1px solid #ddd; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-        .preview-grid { display: flex; gap: 8px; overflow-x: auto; margin: 10px 0; padding-bottom: 5px; }
-        .preview-grid img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; flex-shrink: 0; border: 1px solid #eee; }
-        button { width: 100%; padding: 16px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 1rem; }
+        .item-block { background: white; padding: 20px; border-radius: 15px; margin-bottom: 15px; border: 1px solid #ddd; }
+        .preview-grid { display: flex; gap: 8px; overflow-x: auto; margin: 10px 0; }
+        .preview-grid img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+        button { width: 100%; padding: 16px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; font-size: 1rem; }
         .ai-btn { background: #5856d6; color: white; margin-top: 10px; }
-        .ai-btn:disabled { background: #ccc; }
         .copy-box { background: #fff; padding: 15px; border-radius: 12px; margin-top: 15px; border-left: 5px solid #5856d6; box-shadow: 0 4px 12px rgba(0,0,0,0.1); position: relative; }
-        pre { white-space: pre-wrap; font-size: 0.95rem; margin: 0; font-family: inherit; line-height: 1.4; }
-        .copy-btn { position: absolute; top: 10px; right: 10px; background: #000; color: #fff; padding: 5px 10px; font-size: 0.7rem; border-radius: 6px; }
+        pre { white-space: pre-wrap; font-size: 0.95rem; margin: 0; font-family: inherit; }
         .loading-text { color: #5856d6; font-weight: bold; text-align: center; display: none; padding: 10px; }
-        .add-more { background: #e5e5ea; color: #333; margin-top: 20px; }
     </style>
 </head>
 <body>
-
 <div class="container">
-    <h2>Listing Assistant</h2>
-
     <div class="api-box">
-        <label style="font-size: 0.8rem; opacity: 0.8;">Gemini API Key (Saved Automatically)</label>
-        <input type="password" id="apiKey" placeholder="Paste key here..." oninput="saveKey(this.value)">
+        <label>Gemini API Key</label>
+        <input type="password" id="apiKey" oninput="localStorage.setItem('gemini_key', this.value)">
     </div>
-
     <div id="items-container"></div>
-    
-    <button class="add-more" onclick="addItem()">+ Add Another Item</button>
+    <button onclick="addItem()" style="background:#e5e5ea; margin-top:10px;">+ Add Item</button>
 </div>
 
 <script>
-    // Load saved key on startup
     window.onload = () => {
-        const saved = localStorage.getItem('gemini_key');
-        if (saved) document.getElementById('apiKey').value = saved;
+        document.getElementById('apiKey').value = localStorage.getItem('gemini_key') || '';
         addItem();
     };
 
-    function saveKey(val) { localStorage.setItem('gemini_key', val); }
-
-    let itemCount = 0;
     function addItem() {
-        itemCount++;
+        const id = ++itemCount;
         const div = document.createElement('div');
         div.className = 'item-block';
         div.innerHTML = `
-            <strong>Item #${itemCount}</strong>
-            <input type="file" id="files-${itemCount}" multiple accept="image/*" onchange="preview(${itemCount})" style="display:block; margin: 10px 0;">
-            <div id="preview-${itemCount}" class="preview-grid"></div>
-            <div id="loading-${itemCount}" class="loading-text">AI is reading photos... 🔎</div>
-            <button class="ai-btn" id="btn-${itemCount}" onclick="runAI(${itemCount})">Scan Photos & Generate</button>
-            <div id="result-${itemCount}"></div>
+            <strong>Item #${id}</strong>
+            <input type="file" id="files-${id}" multiple accept="image/*" onchange="preview(${id})">
+            <div id="preview-${id}" class="preview-grid"></div>
+            <div id="loading-${id}" class="loading-text">AI is reading photos... 🔎</div>
+            <button class="ai-btn" id="btn-${id}" onclick="runAI(${id})">Scan & Generate</button>
+            <div id="result-${id}"></div>
         `;
         document.getElementById('items-container').appendChild(div);
     }
+    let itemCount = 0;
 
     function preview(id) {
         const grid = document.getElementById(`preview-${id}`);
         grid.innerHTML = "";
-        Array.from(document.getElementById(`files-${id}`).files).slice(0, 8).forEach(file => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = document.createElement('img');
-                img.src = e.target.result;
-                grid.appendChild(img);
-            }
-            reader.readAsDataURL(file);
+        Array.from(document.getElementById(`files-${id}`).files).slice(0, 5).forEach(file => {
+            const img = document.createElement('img');
+            img.src = URL.createObjectURL(file);
+            grid.appendChild(img);
         });
     }
 
     async function runAI(id) {
         const key = document.getElementById('apiKey').value;
         const files = document.getElementById(`files-${id}`).files;
-        if (!key || files.length === 0) return alert("Need Key + Photos!");
+        if (!key || !files[0]) return alert("Key + Photo needed!");
 
-        const btn = document.getElementById(`btn-${id}`);
-        const load = document.getElementById(`loading-${id}`);
-        btn.disabled = true;
-        load.style.display = 'block';
-
+        document.getElementById(`loading-${id}`).style.display = 'block';
+        
         try {
-            const base64 = (await toBase64(files[0])).split(',')[1];
-            
+            // Shrink image to 800px to avoid errors
+            const base64 = await resizeImage(files[0]);
+
             const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     contents: [{
                         parts: [
-                            { text: "Act as an expert Depop/eBay seller. Look at the photo and create a listing in this EXACT format:\n\nTitle: [Brand] [Item] [Colour] [Size] - sku\n\nColour: [Colour]\nSize: [Size]\nCondition: [Condition]\n\n🧼 Washed and ironed, ready to be worn!\n\n[One sentence about the item's style or fit]\n\nSame day / Next day shipping!\nMessage me if you have any questions!\n#vintage #streetwear #fashion #style #resell" },
+                            { text: "Create a listing. Format:\nTitle: [Brand] [Item] [Colour] [Size] - sku\n\nColour: [Colour]\nSize: [Size]\nCondition: [Condition]\n\n🧼 Washed and ironed, ready to be worn!\n\n[One sentence about item]\n\nSame day / Next day shipping!\nMessage me if you have any questions!\n#vintage #streetwear #fashion #style #resell" },
                             { inline_data: { mime_type: "image/jpeg", data: base64 } }
                         ]
                     }]
@@ -105,34 +87,33 @@
 
             const data = await resp.json();
             const text = data.candidates[0].content.parts[0].text;
-            
-            document.getElementById(`result-${id}`).innerHTML = `
-                <div class="copy-box">
-                    <button class="copy-btn" onclick="copyThis(this)">Copy</button>
-                    <pre>${text}</pre>
-                </div>
-            `;
+            document.getElementById(`result-${id}`).innerHTML = `<div class="copy-box"><button onclick="navigator.clipboard.writeText(this.nextElementSibling.innerText); this.innerText='Copied!'" style="width:auto; float:right;">Copy</button><pre>${text}</pre></div>`;
         } catch (e) {
-            alert("Error: Check your key or internet.");
-            console.error(e);
+            alert("Error! Check if your API key is enabled in Google AI Studio.");
         }
-        btn.disabled = false;
-        load.style.display = 'none';
+        document.getElementById(`loading-${id}`).style.display = 'none';
     }
 
-    const toBase64 = file => new Promise((res, rej) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => res(reader.result);
-        reader.onerror = e => rej(e);
-    });
-
-    function copyThis(btn) {
-        navigator.clipboard.writeText(btn.nextElementSibling.innerText);
-        btn.innerText = "Copied!";
-        setTimeout(() => btn.innerText = "Copy", 2000);
+    function resizeImage(file) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const max = 800;
+                    let w = img.width, h = img.height;
+                    if (w > h) { if (w > max) { h *= max / w; w = max; } }
+                    else { if (h > max) { w *= max / h; h = max; } }
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/jpeg', 0.7).split(',')[1]);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
     }
 </script>
-
 </body>
 </html>
