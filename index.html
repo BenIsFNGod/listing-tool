@@ -23,7 +23,7 @@
 <div class="container">
     <div class="api-box">
         <label>Gemini API Key</label>
-        <input type="password" id="apiKey" oninput="localStorage.setItem('gemini_key', this.value)">
+        <input type="password" id="apiKey">
     </div>
     <div id="items-container"></div>
     <button onclick="addItem()" style="background:#e5e5ea; margin-top:10px;">+ Add Item</button>
@@ -32,9 +32,11 @@
 <script>
     window.onload = () => {
         document.getElementById('apiKey').value = localStorage.getItem('gemini_key') || '';
+        document.getElementById('apiKey').oninput = (e) => localStorage.setItem('gemini_key', e.target.value);
         addItem();
     };
 
+    let itemCount = 0;
     function addItem() {
         const id = ++itemCount;
         const div = document.createElement('div');
@@ -49,7 +51,6 @@
         `;
         document.getElementById('items-container').appendChild(div);
     }
-    let itemCount = 0;
 
     function preview(id) {
         const grid = document.getElementById(`preview-${id}`);
@@ -66,32 +67,42 @@
         const files = document.getElementById(`files-${id}`).files;
         if (!key || !files[0]) return alert("Key + Photo needed!");
 
-        document.getElementById(`loading-${id}`).style.display = 'block';
+        const btn = document.getElementById(`btn-${id}`);
+        const load = document.getElementById(`loading-${id}`);
+        btn.disabled = true;
+        load.style.display = 'block';
         
         try {
-            // Shrink image to 800px to avoid errors
             const base64 = await resizeImage(files[0]);
 
-            const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
+            // UPDATED ENDPOINT AND MODEL NAME TO FIX 404
+            const resp = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${key}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     contents: [{
                         parts: [
-                            { text: "Create a listing. Format:\nTitle: [Brand] [Item] [Colour] [Size] - sku\n\nColour: [Colour]\nSize: [Size]\nCondition: [Condition]\n\n🧼 Washed and ironed, ready to be worn!\n\n[One sentence about item]\n\nSame day / Next day shipping!\nMessage me if you have any questions!\n#vintage #streetwear #fashion #style #resell" },
+                            { text: "Look at the item and create a listing. Format:\nTitle: [Brand] [Item] [Colour] [Size] - sku\n\nColour: [Colour]\nSize: [Size]\nCondition: [Condition]\n\n🧼 Washed and ironed, ready to be worn!\n\n[One sentence about item style]\n\nSame day / Next day shipping!\nMessage me if you have any questions!\n#vintage #streetwear #fashion #style #resell" },
                             { inline_data: { mime_type: "image/jpeg", data: base64 } }
                         ]
                     }]
                 })
             });
 
+            if (!resp.ok) throw new Error();
+
             const data = await resp.json();
             const text = data.candidates[0].content.parts[0].text;
-            document.getElementById(`result-${id}`).innerHTML = `<div class="copy-box"><button onclick="navigator.clipboard.writeText(this.nextElementSibling.innerText); this.innerText='Copied!'" style="width:auto; float:right;">Copy</button><pre>${text}</pre></div>`;
+            document.getElementById(`result-${id}`).innerHTML = `
+                <div class="copy-box">
+                    <button onclick="navigator.clipboard.writeText(this.nextElementSibling.innerText); this.innerText='Copied!'" style="width:auto; float:right; background:#000; color:#fff; padding:4px 8px; border-radius:4px;">Copy</button>
+                    <pre>${text}</pre>
+                </div>`;
         } catch (e) {
-            alert("Error! Check if your API key is enabled in Google AI Studio.");
+            alert("Model Error (404/403). Ensure 'Generative Language API' is enabled in your Google Cloud Dashboard for this project.");
         }
-        document.getElementById(`loading-${id}`).style.display = 'none';
+        btn.disabled = false;
+        load.style.display = 'none';
     }
 
     function resizeImage(file) {
@@ -107,7 +118,7 @@
                     else { if (h > max) { w *= max / h; h = max; } }
                     canvas.width = w; canvas.height = h;
                     canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                    resolve(canvas.toDataURL('image/jpeg', 0.7).split(',')[1]);
+                    resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
                 };
                 img.src = e.target.result;
             };
