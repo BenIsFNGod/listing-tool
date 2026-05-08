@@ -3,36 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI Listing Assistant</title>
+    <title>Listing Assistant</title>
     <style>
         body { font-family: -apple-system, sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
         .container { max-width: 500px; margin: auto; padding-bottom: 100px; }
         .api-box { background: #1a1a1a; color: white; padding: 15px; border-radius: 12px; margin-bottom: 20px; }
         .api-box input { width: 100%; padding: 10px; margin-top: 8px; border-radius: 8px; border: none; box-sizing: border-box; }
         .item-block { background: white; padding: 20px; border-radius: 15px; margin-bottom: 15px; border: 1px solid #ddd; }
-        .preview-grid { display: flex; gap: 8px; overflow-x: auto; margin: 10px 0; }
-        .preview-grid img { width: 80px; height: 80px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
-        button { width: 100%; padding: 16px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; font-size: 1rem; }
+        button { width: 100%; padding: 16px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; }
         .ai-btn { background: #5856d6; color: white; margin-top: 10px; }
         .copy-box { background: #fff; padding: 15px; border-radius: 12px; margin-top: 15px; border-left: 5px solid #5856d6; box-shadow: 0 4px 12px rgba(0,0,0,0.1); position: relative; }
-        pre { white-space: pre-wrap; font-size: 0.95rem; margin: 0; font-family: inherit; }
-        .loading-text { color: #5856d6; font-weight: bold; text-align: center; display: none; padding: 10px; }
+        pre { white-space: pre-wrap; font-size: 0.95rem; margin: 0; }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="api-box">
-        <label>Gemini API Key</label>
-        <input type="password" id="apiKey">
+        <label>API Key</label>
+        <input type="password" id="apiKey" oninput="localStorage.setItem('gemini_key', this.value)">
     </div>
     <div id="items-container"></div>
-    <button onclick="addItem()" style="background:#e5e5ea; margin-top:10px;">+ Add Item</button>
+    <button onclick="addItem()" style="background:#ddd; margin-top:10px;">+ Add Item</button>
 </div>
 
 <script>
     window.onload = () => {
         document.getElementById('apiKey').value = localStorage.getItem('gemini_key') || '';
-        document.getElementById('apiKey').oninput = (e) => localStorage.setItem('gemini_key', e.target.value);
         addItem();
     };
 
@@ -43,9 +39,8 @@
         div.className = 'item-block';
         div.innerHTML = `
             <strong>Item #${id}</strong>
-            <input type="file" id="files-${id}" multiple accept="image/*" onchange="preview(${id})">
-            <div id="preview-${id}" class="preview-grid"></div>
-            <div id="loading-${id}" class="loading-text">AI is reading photos... 🔎</div>
+            <input type="file" id="files-${id}" accept="image/*" onchange="preview(${id})">
+            <div id="preview-${id}" style="margin-top:10px"></div>
             <button class="ai-btn" id="btn-${id}" onclick="runAI(${id})">Scan & Generate</button>
             <div id="result-${id}"></div>
         `;
@@ -53,77 +48,50 @@
     }
 
     function preview(id) {
-        const grid = document.getElementById(`preview-${id}`);
-        grid.innerHTML = "";
-        Array.from(document.getElementById(`files-${id}`).files).slice(0, 5).forEach(file => {
-            const img = document.createElement('img');
-            img.src = URL.createObjectURL(file);
-            grid.appendChild(img);
-        });
+        const file = document.getElementById(`files-${id}`).files[0];
+        document.getElementById(`preview-${id}`).innerHTML = `<img src="${URL.createObjectURL(file)}" style="width:100px; border-radius:8px;">`;
     }
 
     async function runAI(id) {
         const key = document.getElementById('apiKey').value;
-        const files = document.getElementById(`files-${id}`).files;
-        if (!key || !files[0]) return alert("Key + Photo needed!");
-
+        const file = document.getElementById(`files-${id}`).files[0];
         const btn = document.getElementById(`btn-${id}`);
-        const load = document.getElementById(`loading-${id}`);
-        btn.disabled = true;
-        load.style.display = 'block';
-        
+        btn.innerText = "Analyzing...";
+
         try {
-            const base64 = await resizeImage(files[0]);
-
-            // UPDATED ENDPOINT AND MODEL NAME TO FIX 404
-            const resp = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${key}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [
-                            { text: "Look at the item and create a listing. Format:\nTitle: [Brand] [Item] [Colour] [Size] - sku\n\nColour: [Colour]\nSize: [Size]\nCondition: [Condition]\n\n🧼 Washed and ironed, ready to be worn!\n\n[One sentence about item style]\n\nSame day / Next day shipping!\nMessage me if you have any questions!\n#vintage #streetwear #fashion #style #resell" },
-                            { inline_data: { mime_type: "image/jpeg", data: base64 } }
-                        ]
-                    }]
-                })
-            });
-
-            if (!resp.ok) throw new Error();
-
-            const data = await resp.json();
-            const text = data.candidates[0].content.parts[0].text;
-            document.getElementById(`result-${id}`).innerHTML = `
-                <div class="copy-box">
-                    <button onclick="navigator.clipboard.writeText(this.nextElementSibling.innerText); this.innerText='Copied!'" style="width:auto; float:right; background:#000; color:#fff; padding:4px 8px; border-radius:4px;">Copy</button>
-                    <pre>${text}</pre>
-                </div>`;
-        } catch (e) {
-            alert("Model Error (404/403). Ensure 'Generative Language API' is enabled in your Google Cloud Dashboard for this project.");
-        }
-        btn.disabled = false;
-        load.style.display = 'none';
-    }
-
-    function resizeImage(file) {
-        return new Promise((resolve) => {
             const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const max = 800;
-                    let w = img.width, h = img.height;
-                    if (w > h) { if (w > max) { h *= max / w; w = max; } }
-                    else { if (h > max) { w *= max / h; h = max; } }
-                    canvas.width = w; canvas.height = h;
-                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                    resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
-                };
-                img.src = e.target.result;
-            };
             reader.readAsDataURL(file);
-        });
+            reader.onload = async () => {
+                const base64 = reader.result.split(',')[1];
+                
+                // Trying a slightly different "stable" endpoint
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`;
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{ text: "Create a clothing listing. Format: Title: [Brand] [Item] [Colour] [Size] - sku. Same day shipping." }, 
+                                    { inline_data: { mime_type: "image/jpeg", data: base64 } }]
+                        }]
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert("GOOGLE ERROR: " + data.error.message);
+                } else {
+                    const text = data.candidates[0].content.parts[0].text;
+                    document.getElementById(`result-${id}`).innerHTML = `<div class="copy-box"><pre>${text}</pre></div>`;
+                }
+                btn.innerText = "Scan & Generate";
+            };
+        } catch (e) {
+            alert("App Error: " + e.message);
+            btn.innerText = "Scan & Generate";
+        }
     }
 </script>
 </body>
