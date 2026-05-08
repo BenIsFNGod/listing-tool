@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Listing Gen</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; padding: 15px; margin: 0; }
+        .container { max-width: 500px; margin: auto; }
+        h2 { text-align: center; color: #1a1a1a; margin-bottom: 20px; }
+        .item-block { background: white; padding: 20px; border-radius: 15px; margin-bottom: 15px; shadow: 0 2px 10px rgba(0,0,0,0.05); border: 1px solid #e0e0e0; }
+        label { display: block; margin-top: 12px; font-weight: 600; font-size: 0.85rem; color: #666; }
+        input, select { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ddd; border-radius: 10px; font-size: 16px; box-sizing: border-box; background: #fafafa; }
+        .photo-preview { display: flex; gap: 8px; margin-top: 10px; overflow-x: auto; padding-bottom: 5px; }
+        .photo-preview img { width: 70px; height: 70px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+        .btn-group { display: flex; gap: 10px; position: sticky; bottom: 20px; background: rgba(240, 242, 245, 0.9); padding: 10px 0; }
+        button { flex: 1; padding: 15px; border: none; border-radius: 12px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: transform 0.1s; }
+        button:active { transform: scale(0.98); }
+        .add-btn { background: #007AFF; color: white; }
+        .gen-btn { background: #34C759; color: white; }
+        .output-box { background: #fff; padding: 15px; border-radius: 12px; margin-top: 15px; position: relative; border-left: 5px solid #34C759; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .copy-btn { position: absolute; top: 10px; right: 10px; background: #000; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; font-size: 0.7rem; }
+        pre { white-space: pre-wrap; word-wrap: break-word; font-family: inherit; font-size: 0.9rem; margin-top: 25px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Listing Assistant</h2>
+    <div id="items-container"></div>
+
+    <div class="btn-group">
+        <button class="add-btn" onclick="addItem()">+ Add Item</button>
+        <button class="gen-btn" onclick="generateListings()">Generate</button>
+    </div>
+
+    <div id="output"></div>
+</div>
+
+<script>
+    let itemCount = 0;
+
+    function addItem() {
+        if (itemCount >= 10) return;
+        itemCount++;
+        const div = document.createElement('div');
+        div.className = 'item-block';
+        div.innerHTML = `
+            <div style="display:flex; justify-content:space-between;"><strong>Item #${itemCount}</strong></div>
+            <label>Photos (8 max)</label>
+            <input type="file" multiple accept="image/*" onchange="previewImages(event, ${itemCount})">
+            <div id="preview-${itemCount}" class="photo-preview"></div>
+            
+            <input type="text" class="brand" placeholder="Brand (e.g. Stone Island)">
+            <input type="text" class="name" placeholder="Item Name (e.g. Sweatshirt)">
+            <div style="display:flex; gap:5px;">
+                <input type="text" class="colour" placeholder="Colour">
+                <input type="text" class="size" placeholder="Size">
+            </div>
+            <input type="text" class="cond" placeholder="Condition (e.g. 9/10)">
+            <input type="text" class="desc" placeholder="Brief description...">
+            <input type="text" class="sku" placeholder="SKU (optional)">
+        `;
+        document.getElementById('items-container').appendChild(div);
+    }
+
+    function previewImages(event, id) {
+        const preview = document.getElementById(`preview-${id}`);
+        preview.innerHTML = "";
+        Array.from(event.target.files).slice(0, 8).forEach(file => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                preview.appendChild(img);
+            }
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function generateListings() {
+        const output = document.getElementById('output');
+        output.innerHTML = "";
+        document.querySelectorAll('.item-block').forEach(block => {
+            const data = {
+                brand: block.querySelector('.brand').value,
+                name: block.querySelector('.name').value,
+                colour: block.querySelector('.colour').value,
+                size: block.querySelector('.size').value,
+                cond: block.querySelector('.cond').value,
+                desc: block.querySelector('.desc').value,
+                sku: block.querySelector('.sku').value
+            };
+
+            const text = `Title: ${data.brand} ${data.name} ${data.colour} ${data.size} - ${data.sku}\n\nColour: ${data.colour}\nSize: ${data.size}\nCondition: ${data.cond}\n\n🧼 Washed and ironed, ready to be worn!\n\n${data.desc}\n\nSame day / Next day shipping!\nMessage me if you have any questions!\n\n#vintage #resell #fashion #streetwear #depop`;
+
+            const box = document.createElement('div');
+            box.className = 'output-box';
+            box.innerHTML = `<button class="copy-btn" onclick="copyText(this)">Copy</button><pre>${text}</pre>`;
+            output.appendChild(box);
+        });
+        window.scrollTo(0, document.body.scrollHeight);
+    }
+
+    function copyText(btn) {
+        const text = btn.nextElementSibling.innerText;
+        navigator.clipboard.writeText(text);
+        btn.innerText = "Done!";
+        setTimeout(() => btn.innerText = "Copy", 1500);
+    }
+
+    addItem();
+</script>
+
+</body>
+</html>
